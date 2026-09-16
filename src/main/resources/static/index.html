@@ -1,0 +1,361 @@
+<!-- 客服聊天前端介面，呼叫後端 POST /api/chat，顯示對話泡泡、打字動畫、預設快捷問題 -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電商客服中心</title>
+  <style>
+    /* ── 全域變數 ── */
+    :root {
+      --primary: #5B5EA6;
+      --primary-light: #9B8DBF;
+      --bg: #F0F2F8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      margin: 0;
+      height: 100vh;
+      display: flex;
+    }
+
+    /* ── 主容器：撐滿整個視窗 ── */
+    .container {
+      flex: 1;
+      height: 100vh;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── 頂部 Header ── */
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      padding: 18px 22px;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .header-icon {
+      width: 46px; height: 46px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .header-info h1 { font-size: 16px; font-weight: 600; letter-spacing: .3px; }
+    .header-info p  { font-size: 12px; opacity: .8; margin-top: 3px; }
+    .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 5px; }
+
+    /* ── 訊息區域 ── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: #dce0f0; border-radius: 4px; }
+
+    /* ── 對話泡泡 ── */
+    .msg-row { display: flex; align-items: flex-end; gap: 8px; }
+    .msg-row.user { flex-direction: row-reverse; }
+    .avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .avatar.bot  { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: white; }
+    .avatar.user { background: #e8e8f0; }
+    .bubble-wrap { display: flex; flex-direction: column; max-width: min(70%, 680px); }
+    .msg-row.user .bubble-wrap { align-items: flex-end; }
+    .bubble {
+      padding: 10px 15px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.65;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .bubble.bot  { background: #F4F4FB; color: #1e1e2e; border-bottom-left-radius: 4px; }
+    .bubble.user { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
+    .time { font-size: 11px; color: #bbb; margin-top: 4px; padding: 0 3px; }
+
+    /* ── 快捷選項列（每次 AI 回答後都顯示，使用者送出後消失）── */
+    .suggestion-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding-left: 42px; /* 對齊 bot 泡泡的縮排 */
+    }
+    .suggestion-btn {
+      background: white;
+      border: 1.5px solid #e0e0ee;
+      border-radius: 16px;
+      padding: 7px 13px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--primary);
+      transition: all .2s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .suggestion-btn:hover {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    /* ── 打字動畫（等待 AI 回答時顯示三個跳動的點）── */
+    .typing-bubble {
+      background: #F4F4FB;
+      border-radius: 18px;
+      border-bottom-left-radius: 4px;
+      padding: 13px 16px;
+      display: flex; gap: 5px; align-items: center;
+    }
+    .typing-bubble span {
+      width: 7px; height: 7px;
+      background: #bbb;
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .typing-bubble span:nth-child(2) { animation-delay: .2s; }
+    .typing-bubble span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-6px); }
+    }
+
+    /* ── 底部輸入欄 ── */
+    .input-area {
+      padding: 12px 14px;
+      border-top: 1px solid #f0f0f5;
+      display: flex; gap: 10px; align-items: center;
+      background: white; flex-shrink: 0;
+    }
+    .input-area input {
+      flex: 1;
+      border: 1.5px solid #e0e0ee;
+      border-radius: 24px;
+      padding: 11px 18px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+      color: #1e1e2e;
+    }
+    .input-area input:focus { border-color: var(--primary); }
+    .input-area input:disabled { background: #fafafa; }
+    .send-btn {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      border: none; border-radius: 50%;
+      color: white; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .2s, transform .15s;
+      flex-shrink: 0;
+    }
+    .send-btn:hover:not(:disabled) { opacity: .9; transform: scale(1.08); }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 頂部標題列 -->
+  <div class="header">
+    <div class="header-icon">🎧</div>
+    <div class="header-info">
+      <h1>電商客服中心</h1>
+      <p><span class="dot"></span>線上服務中</p>
+    </div>
+  </div>
+
+  <!-- 對話訊息區（Bot 開場白與快捷選項由 JS 動態產生）-->
+  <div class="messages" id="messages"></div>
+
+  <!-- 底部文字輸入欄 -->
+  <div class="input-area">
+    <input type="text" id="input" placeholder="請輸入您的問題…" autocomplete="off" />
+    <button class="send-btn" id="send-btn" onclick="sendMessage()" title="送出">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+
+</div>
+
+<script>
+  // 每次開啟頁面都產生一個新的隨機 sessionId，用來區分不同對話
+  const sessionId = 'session-' + Math.random().toString(36).slice(2, 9);
+
+  const input      = document.getElementById('input');
+  const messagesEl = document.getElementById('messages');
+  const sendBtn    = document.getElementById('send-btn');
+
+  // 三個預設快捷選項：模擬電商使用者最常問的問題
+  const SUGGESTIONS = [
+    { emoji: '📦', label: '訂單查詢',  text: '我的訂單狀態顯示處理中，請問什麼時候會出貨？' },
+    { emoji: '🔄', label: '退換貨申請', text: '我收到的商品與描述不符，想申請退換貨，請問流程是什麼？' },
+    { emoji: '💳', label: '付款問題',  text: '我剛才結帳時付款好像沒成功，但信用卡好像有扣款，該怎麼處理？' },
+  ];
+
+  // 按 Enter 也可以送出
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // 取得目前時間的 HH:MM，顯示在每則訊息下方
+  function timeNow() {
+    return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // 在畫面上新增一則對話泡泡（role: 'user' 或 'bot'）
+  function addMessage(role, text) {
+    const row = document.createElement('div');
+    row.className = 'msg-row ' + (role === 'user' ? 'user' : 'bot');
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar ' + (role === 'user' ? 'user' : 'bot');
+    avatar.textContent = role === 'user' ? '👤' : '🎧';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'bubble-wrap';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'bot');
+    bubble.textContent = text;
+
+    const time = document.createElement('div');
+    time.className = 'time';
+    time.textContent = timeNow();
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(time);
+    row.appendChild(avatar);
+    row.appendChild(wrap);
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // 在 AI 回答後顯示三個快捷選項按鈕，讓使用者一鍵選擇常見問題
+  function addSuggestions() {
+    const row = document.createElement('div');
+    row.className = 'suggestion-row';
+    row.id = 'current-suggestions'; // 唯一 id，方便送訊息前移除
+
+    SUGGESTIONS.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'suggestion-btn';
+      btn.textContent = s.emoji + ' ' + s.label;
+      // 點擊快捷選項 = 把預設文字填入輸入框並送出
+      btn.onclick = () => quickSend(s.text);
+      row.appendChild(btn);
+    });
+
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // 移除目前的快捷選項列（送訊息前呼叫，避免畫面堆積）
+  function removeSuggestions() {
+    const el = document.getElementById('current-suggestions');
+    if (el) el.remove();
+  }
+
+  // 點擊快捷選項時：帶入預設問題文字並直接送出
+  function quickSend(text) {
+    input.value = text;
+    sendMessage();
+  }
+
+  // 顯示「AI 正在輸入中」的三點跳動動畫
+  function addTyping() {
+    const row = document.createElement('div');
+    row.className = 'msg-row bot';
+    row.id = 'typing-row';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar bot';
+    avatar.textContent = '🎧';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'bubble-wrap';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'typing-bubble';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+
+    wrap.appendChild(bubble);
+    row.appendChild(avatar);
+    row.appendChild(wrap);
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // 移除打字動畫泡泡
+  function removeTyping() {
+    const el = document.getElementById('typing-row');
+    if (el) el.remove();
+  }
+
+  // 主要送出流程：移除快捷選項 → 顯示使用者訊息 → 呼叫 API → 顯示回答 → 再次顯示快捷選項
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    sendBtn.disabled = true;
+    input.disabled = true;
+
+    // 送出前先移除上一輪的快捷選項
+    removeSuggestions();
+
+    addMessage('user', text);
+    addTyping();
+
+    try {
+      // 呼叫後端 POST /api/chat
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, message: text })
+      });
+
+      removeTyping();
+      const data = await res.json();
+      addMessage('bot', res.ok ? data.answer : (data.error || '抱歉，發生了一些問題，請稍後再試。'));
+
+    } catch {
+      removeTyping();
+      addMessage('bot', '目前無法連線，請確認後端服務是否正常運作。');
+    }
+
+    // AI 回答完畢後，再次顯示快捷選項供使用者選擇
+    addSuggestions();
+
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+  }
+
+  // 頁面載入完成後：顯示 Bot 開場問候語，並立即顯示快捷選項
+  window.addEventListener('load', () => {
+    addMessage('bot', '您好，很高興為您服務！請問今天需要什麼協助呢？');
+    addSuggestions();
+  });
+</script>
+</body>
+</html>
